@@ -106,17 +106,19 @@ module Delayed
       Delayed::Worker.logger = Logger.new(File.join(Rails.root, 'log', 'delayed_job.log'))
       Delayed::Worker.backend.after_fork
 
-      if !@options[:file_worker_count].nil? && worker_index <= @options[:file_worker_count] 
-        Rails.logger.debug "#{Time.now.strftime('%FT%T%z')}: Attempting to load file: #{@options[:file]} in worker: #{worker_index}"
-        begin 
-          require @options[:file]
-        rescue => e
-          Rails.logger.debug "#{Time.now.strftime('%FT%T%z')}: #{e.message}"
-        end
-      end
       
       worker = Delayed::Worker.new(@options)
       worker.name_prefix = "#{worker_name} "
+
+      if !@options[:file_worker_count].nil? && worker_index <= @options[:file_worker_count] 
+        worker.say "Attempting to load file: #{@options[:file]} in worker: #{worker_index}"
+        begin 
+          require @options[:file]
+        rescue => e
+          worker.say "#{e.message}"
+        end
+      end
+
       worker.start
     rescue => e
       Rails.logger.fatal e
