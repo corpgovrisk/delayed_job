@@ -17,7 +17,7 @@ module Delayed
       @monitor = false
       
       opts = OptionParser.new do |opts|
-        opts.banner = "Usage: #{File.basename($0)} [options] start|stop|restart|run"
+        opts.banner = "Usage: #{File.basename($0)} start|stop|restart|run [options]"
 
         opts.on('-h', '--help', 'Show this message') do
           puts opts
@@ -50,6 +50,12 @@ module Delayed
         opts.on('-p', '--prefix NAME', "String to be prefixed to worker process names") do |prefix|
           @options[:prefix] = prefix
         end
+        opts.on('--file=FILE', "File to be run in processes in addition to normal delayed_job behaviour") do |file|
+          @options[:file] = file
+        end
+        opts.on('-fn', '--number_of_workers_for_file=workers', "Number of unique workers to have file included") do |worker_count|
+          @options[:file_worker_count] = worker_count.to_i rescue 1
+        end
       end
       @args = opts.parse!(args)
     end
@@ -72,20 +78,21 @@ module Delayed
       else
         worker_count.times do |worker_index|
           process_name = worker_count == 1 ? "delayed_job" : "delayed_job.#{worker_index}"
-          run_process(process_name, dir)
+          run_process(process_name, dir, worker_index)
         end
       end
     end
     
-    def run_process(process_name, dir)
+    def run_process(process_name, dir, worker_index = 0)
       Daemons.run_proc(process_name, :dir => dir, :dir_mode => :normal, :monitor => @monitor, :ARGV => @args) do |*args|
         $0 = File.join(@options[:prefix], process_name) if @options[:prefix]
-        run process_name
+        run process_name, worker_index
       end
     end
     
-    def run(worker_name = nil)
+    def run(worker_name = nil, worker_index = 0)
       Dir.chdir(Rails.root)
+
       
       # Re-open file handles
       @files_to_reopen.each do |file|
@@ -98,6 +105,15 @@ module Delayed
       
       Delayed::Worker.logger = Logger.new(File.join(Rails.root, 'log', 'delayed_job.log'))
       Delayed::Worker.backend.after_fork
+
+      if !@options[:file_worker_count].nil? && worker_index <= @options[:file_worker_count] 
+        Rails.logger.debug "#{Time.now.strftime('%FT%T%z')}: Attempting to load file: #{@options[:file]} in worker: #{worker_index}"
+        begin 
+          require @options[:file]
+        rescue => e
+          Rails.logger.debug "#{Time.now.strftime('%FT%T%z')}: #{e.message}"
+        end
+      end
       
       worker = Delayed::Worker.new(@options)
       worker.name_prefix = "#{worker_name} "
