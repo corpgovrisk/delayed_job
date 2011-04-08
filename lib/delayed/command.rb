@@ -52,6 +52,10 @@ module Delayed
         end
         opts.on('--file=FILE', "File to be run in processes in addition to normal delayed_job behaviour") do |file|
           @options[:file] = file
+          # Default if specified file but not the file_worker_count
+          if @options[:file_worker_count].nil?
+            @options[:file_worker_count] = 1
+          end
         end
         opts.on('-fn', '--number_of_workers_for_file=workers', "Number of unique workers to have file included") do |worker_count|
           @options[:file_worker_count] = worker_count.to_i rescue 1
