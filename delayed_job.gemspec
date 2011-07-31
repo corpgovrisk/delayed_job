@@ -1,9 +1,8 @@
-# encoding: utf-8
 
 Gem::Specification.new do |s|
   s.name              = 'delayed_job'
   s.version           = '2.1.4'
-  s.authors           = ["Chris Gaffney", "Brandon Keepers", "Tobias L\303\274tke"]
+  s.authors           = ["Chris Gaffney", "Brandon Keepers", "Tobias Lutke"]
   s.summary           = 'Database-backed asynchronous priority queue system -- Extracted from Shopify'
   s.description       = "Delayed_job (or DJ) encapsulates the common pattern of asynchronously executing longer tasks in the background. It is a direct extraction from Shopify where the job table is responsible for a multitude of core tasks.
 
