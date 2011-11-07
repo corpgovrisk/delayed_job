@@ -74,15 +74,20 @@ module Delayed
       loop do
         result = nil
 
+        say "Working..."
         realtime = Benchmark.realtime do
+          say "Benchmark..."
           result = work_off
         end
 
+        say "Starting count..."
         count = result.sum
+        say "Finished count..."
 
         break if $exit
 
         if count.zero?
+          say "No jobs, sleeping..."
           sleep(self.class.sleep_delay)
         else
           say "#{count} jobs processed at %.4f j/s, %d failed ..." % [count / realtime, result.last]
@@ -90,6 +95,7 @@ module Delayed
 
         break if $exit
       end
+      say "Broke out of loop."
 
     ensure
       Delayed::Job.clear_locks!(name)
@@ -98,7 +104,8 @@ module Delayed
     # Do num jobs and return stats on success/failure.
     # Exit early if interrupted.
     def work_off(num = 100)
-      success, failure = 0, 0
+      success = 0
+      failure = 0
 
       num.times do
         case reserve_and_run_one_job
@@ -123,9 +130,13 @@ module Delayed
       say "#{job.name} completed after %.4f" % runtime
       return true  # did work
     rescue DeserializationError => error
+      say "DeserializationError"
+      say error.backtrace
       job.last_error = "{#{error.message}\n#{error.backtrace.join('\n')}"
       failed(job)
     rescue Exception => error
+      say "Exception"
+      say error.backtrace
       handle_failed_job(job, error)
       return false  # work failed
     end
@@ -173,7 +184,9 @@ module Delayed
     # Run the next job we can get an exclusive lock on.
     # If no jobs are left we return nil
     def reserve_and_run_one_job
+      say "Reserve and run one job"
       job = Delayed::Job.reserve(self)
+      say "Run(job)"
       run(job) if job
     end
   end
