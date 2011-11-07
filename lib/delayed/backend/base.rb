@@ -23,18 +23,13 @@ module Delayed
           unless options[:payload_object].respond_to?(:perform)
             raise ArgumentError, 'Cannot enqueue items which do not respond to perform'
           end
-
+          
           if Delayed::Worker.delay_jobs
-            self.new(options).tap do |job|
-              Delayed::Worker.lifecycle.run_callbacks(:enqueue, job) do
-                job.hook(:enqueue)
-                job.save
-              end
+            self.create(options).tap do |job|
+              job.hook(:enqueue)
             end
           else
-            Delayed::Job.new(:payload_object => options[:payload_object]).tap do |job|
-              job.invoke_job
-            end
+            options[:payload_object].perform
           end
         end
 
@@ -88,18 +83,14 @@ module Delayed
       end
 
       def invoke_job
-        Delayed::Worker.lifecycle.run_callbacks(:invoke_job, self) do
-          begin
-            hook :before
-            payload_object.perform
-            hook :success
-          rescue Exception => e
-            hook :error, e
-            raise e
-          ensure
-            hook :after
-          end
-        end
+        hook :before
+        payload_object.perform
+        hook :success
+      rescue Exception => e
+        hook :error, e
+        raise e
+      ensure
+        hook :after
       end
 
       # Unlock this job (note: not saved to DB)
@@ -122,24 +113,15 @@ module Delayed
           payload_object.reschedule_at(self.class.db_time_now, attempts) :
           self.class.db_time_now + (attempts ** 4) + 5
       end
-
+      
       def max_attempts
         payload_object.max_attempts if payload_object.respond_to?(:max_attempts)
       end
-
-      def fail!
-        update_attributes(:failed_at => self.class.db_time_now)
-      end
-
+      
     protected
 
       def set_default_run_at
         self.run_at ||= self.class.db_time_now
-      end
-
-      # Call during reload operation to clear out internal state
-      def reset
-        @payload_object = nil
       end
     end
   end

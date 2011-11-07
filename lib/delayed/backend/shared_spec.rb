@@ -1,7 +1,5 @@
 require File.expand_path('../../../../spec/sample_jobs', __FILE__)
 
-require 'active_support/core_ext'
-
 shared_examples_for 'a delayed_job backend' do
   let(:worker) { Delayed::Worker.new }
 
@@ -28,13 +26,6 @@ shared_examples_for 'a delayed_job backend' do
     job.run_at.should be_within(1).of(later)
   end
 
-  describe "#reload" do
-    it 'should cause the payload to be reloaded' do
-      job = described_class.enqueue :payload_object => SimpleJob.new
-      job.payload_object.object_id.should_not == job.reload.payload_object.object_id
-    end
-  end
-
   describe "enqueue" do
     context "with a hash" do
       it "should raise ArgumentError when handler doesn't respond_to :perform" do
@@ -56,11 +47,6 @@ shared_examples_for 'a delayed_job backend' do
         job = described_class.enqueue :payload_object => SimpleJob.new, :run_at => later
         job.run_at.should be_within(1).of(later)
       end
-
-      it "should be able to set queue" do
-        job = described_class.enqueue :payload_object => SimpleJob.new, :queue => 'tracking'
-        job.queue.should == 'tracking'
-      end
     end
 
     context "with multiple arguments" do
@@ -71,6 +57,12 @@ shared_examples_for 'a delayed_job backend' do
       it "should increase count after enqueuing items" do
         described_class.enqueue SimpleJob.new
         described_class.count.should == 1
+      end
+      
+      it "should not increase count after enqueuing items when delay_jobs is false" do
+        Delayed::Worker.delay_jobs = false
+        described_class.enqueue SimpleJob.new
+        described_class.count.should == 0
       end
 
       it "should be able to set priority [DEPRECATED]" do
@@ -97,27 +89,6 @@ shared_examples_for 'a delayed_job backend' do
         M::ModuleJob.runs = 0
         job = described_class.enqueue M::ModuleJob.new
         lambda { job.invoke_job }.should change { M::ModuleJob.runs }.from(0).to(1)
-      end
-    end
-
-    context "with delay_jobs = false" do
-      before(:each) do
-        Delayed::Worker.delay_jobs = false
-      end
-
-      it "should not increase count after enqueuing items" do
-        described_class.enqueue SimpleJob.new
-        described_class.count.should == 0
-      end
-
-      it 'should invoke the enqueued job' do
-        job = SimpleJob.new
-        job.should_receive(:perform)
-        described_class.enqueue job
-      end
-
-      it 'should return a job, not the result of invocation' do
-        described_class.enqueue(SimpleJob.new).should be_instance_of(described_class)
       end
     end
   end
@@ -170,7 +141,7 @@ shared_examples_for 'a delayed_job backend' do
     end
 
     it "should raise a DeserializationError when the YAML.load raises argument error" do
-      job = described_class.new :handler => "--- !ruby/struct:GoingToRaiseArgError {}"
+      job = described_class.find(create_job.id)
       YAML.should_receive(:load).and_raise(ArgumentError)
       lambda { job.payload_object }.should raise_error(Delayed::DeserializationError)
     end
@@ -198,7 +169,7 @@ shared_examples_for 'a delayed_job backend' do
 
     it "should reserve jobs scheduled for the past when time zones are involved" do
       Time.zone = 'US/Eastern'
-      job = create_job :run_at => described_class.db_time_now - 1.minute
+      job = create_job :run_at => described_class.db_time_now - 1.minute.ago.in_time_zone
       described_class.reserve(worker).should == job
     end
 
@@ -216,7 +187,7 @@ shared_examples_for 'a delayed_job backend' do
     end
 
     it "should reserve expired jobs" do
-      job = create_job(:locked_by => 'some other worker', :locked_at => described_class.db_time_now - Delayed::Worker.max_run_time - 1.minute)
+      job = create_job(:locked_by => worker.name, :locked_at => described_class.db_time_now - 3.minutes)
       described_class.reserve(worker).should == job
     end
 
@@ -244,7 +215,8 @@ shared_examples_for 'a delayed_job backend' do
     it "should parse from handler on deserialization error" do
       job = Story.create(:text => "...").delay.text
       job.payload_object.object.destroy
-      job.reload.name.should == 'Delayed::PerformableMethod'
+      job = described_class.find(job.id)
+      job.name.should == 'Delayed::PerformableMethod'
     end
   end
 
@@ -317,73 +289,20 @@ shared_examples_for 'a delayed_job backend' do
       @job.id.should_not be_nil
     end
   end
-
-  context "named queues" do
-    context "when worker has one queue set" do
-      before(:each) do
-        worker.queues = ['large']
-      end
-
-      it "should only work off jobs which are from its queue" do
-        SimpleJob.runs.should == 0
-
-        create_job(:queue => "large")
-        create_job(:queue => "small")
-        worker.work_off
-
-        SimpleJob.runs.should == 1
-      end
-    end
-
-    context "when worker has two queue set" do
-      before(:each) do
-        worker.queues = ['large', 'small']
-      end
-
-      it "should only work off jobs which are from its queue" do
-        SimpleJob.runs.should == 0
-
-        create_job(:queue => "large")
-        create_job(:queue => "small")
-        create_job(:queue => "medium")
-        create_job
-        worker.work_off
-
-        SimpleJob.runs.should == 2
-      end
-    end
-
-    context "when worker does not have queue set" do
-      before(:each) do
-        worker.queues = []
-      end
-
-      it "should work off all jobs" do
-        SimpleJob.runs.should == 0
-
-        create_job(:queue => "one")
-        create_job(:queue => "two")
-        create_job
-        worker.work_off
-
-        SimpleJob.runs.should == 3
-      end
-    end
-  end
-
+  
   context "max_attempts" do
     before(:each) do
       @job = described_class.enqueue SimpleJob.new
     end
-
+    
     it 'should not be defined' do
       @job.max_attempts.should be_nil
     end
-
+    
     it 'should use the max_retries value on the payload when defined' do
       @job.payload_object.stub!(:max_attempts).and_return(99)
       @job.max_attempts.should == 99
-    end
+    end 
   end
 
   describe "yaml serialization" do
@@ -391,7 +310,7 @@ shared_examples_for 'a delayed_job backend' do
       story = Story.create(:text => 'hello')
       job = story.delay.tell
       story.update_attributes :text => 'goodbye'
-      job.reload.payload_object.object.text.should == 'goodbye'
+      described_class.find(job.id).payload_object.object.text.should == 'goodbye'
     end
 
     it "should raise deserialization error for destroyed records" do
@@ -399,7 +318,7 @@ shared_examples_for 'a delayed_job backend' do
       job = story.delay.tell
       story.destroy
       lambda {
-        job.reload.payload_object
+        described_class.find(job.id).payload_object
       }.should raise_error(Delayed::DeserializationError)
     end
   end

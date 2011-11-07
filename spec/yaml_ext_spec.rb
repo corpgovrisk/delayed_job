@@ -1,41 +1,31 @@
 require 'spec_helper'
 
-describe "YAML" do
-  it "should autoload classes" do
+describe YAML do
+  it "should autoload classes that are unknown at runtime" do
     lambda {
-      yaml = "--- !ruby/class:Autoloaded::Clazz {}\n"
-      YAML.load(yaml).should == Autoloaded::Clazz
+      obj = YAML.load("--- !ruby/object:Autoloaded::Clazz {}")
+      obj.class.to_s.should == 'Autoloaded::Clazz'
     }.should_not raise_error
   end
 
-  it "should autoload the class of a struct" do
+  it "should autoload structs that are unknown at runtime" do
     lambda {
-      yaml = "--- !ruby/class:Autoloaded::Struct {}\n"
-      YAML.load(yaml).should == Autoloaded::Struct
+      obj = YAML.load("--- !ruby/struct:Autoloaded::Struct {}")
+      obj.class.to_s.should == 'Autoloaded::Struct'
     }.should_not raise_error
   end
 
-  it "should autoload the class for the instance of a struct" do
-    lambda {
-      yaml = "--- !ruby/struct:Autoloaded::InstanceStruct {}"
-      YAML.load(yaml).class.should == Autoloaded::InstanceStruct
-    }.should_not raise_error
+  # As we're overriding some of Yaml's internals it is best that our changes
+  # don't impact other places where Yaml is used. Or at least don't make it
+  # look like the exception is caused by DJ
+  it "should not raise exception on poorly formatted yaml" do
+    lambda do
+      YAML.load(<<-EOYAML
+default:
+  <<: *login
+EOYAML
+      )
+    end.should_not raise_error
   end
-
-  it "should autoload the class for the instance" do
-    lambda {
-      yaml = "--- !ruby/object:Autoloaded::InstanceClazz {}\n"
-      YAML.load(yaml).class.should == Autoloaded::InstanceClazz
-    }.should_not raise_error
-  end
-
-  it "should not throw an uninitialized constant Syck::Syck when using YAML.load_file with poorly formed yaml" do
-    lambda {
-      YAML.load_file(File.expand_path('spec/fixtures/bad_alias.yml'))
-    }.should_not raise_error
-  end
-
-  it "should not throw an uninitialized constant Syck::Syck when using YAML.load with poorly formed yaml" do
-    lambda { YAML.load(YAML.dump("foo: *bar"))}.should_not raise_error
-  end
+  
 end
