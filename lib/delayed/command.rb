@@ -1,11 +1,10 @@
-require 'rubygems'
 require 'daemons'
 require 'optparse'
 
 module Delayed
   class Command
     attr_accessor :worker_count
-    
+
     def initialize(args)
       @files_to_reopen = []
       @options = {

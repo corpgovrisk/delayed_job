@@ -1,3 +1,6 @@
 *.gem
 *.swp
 Gemfile.lock
+.DS_Store
+.rvmrc
+*.orig
