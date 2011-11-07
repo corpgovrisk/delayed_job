@@ -1,11 +1,10 @@
-require 'rubygems'
 require 'daemons'
 require 'optparse'
 
 module Delayed
   class Command
     attr_accessor :worker_count
-    
+
     def initialize(args)
       @files_to_reopen = []
       @options = {
@@ -120,6 +119,7 @@ module Delayed
           require @options[:file]
         rescue => e
           worker.say "#{e.message}"
+          worker.say "#{e.backtrace}"
         end
       end
 
@@ -127,6 +127,7 @@ module Delayed
     rescue => e
       Rails.logger.fatal e
       STDERR.puts e.message
+      STDERR.puts e.backtrace
       exit 1
     end
     

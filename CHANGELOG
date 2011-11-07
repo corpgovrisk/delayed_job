@@ -1,3 +1,14 @@
+3.0 - Unreleased
+* New: Named queues
+* New: Job/Worker lifecycle callbacks
+* Change: Active Record backend support is provided by a separate gem
+* Change: Enqueue hook is called before jobs are saved so that they may be modified
+
+2.1.5 - Unreleased
+* Fix problem deserializing models that use a custom primary key column
+* Fix deserializing AR models when the object isn't in the default scope
+* Fix hooks not getting called when delay_jobs is false
+
 2.1.4 - 2011-02-11
 * Working around issues when psych is loaded, fixes issues with bundler 1.0.10 and Rails 3.0.4
 * Added -p/--prefix option to help differentiate multiple delayed job workers on the same host.
@@ -27,6 +38,9 @@
 * Added Rails 3 railtie and generator
 * Changed @@sleep_delay to self.class.sleep_delay to be consistent with other class variable usage
 * Added --sleep-delay command line option
+
+2.0.8 - Unreleased
+* Backport fix for deserialization errors that bring down the daemon
 
 2.0.7 - 2011-02-10
 * Fixed missing generators and recipes for Rails 2.x
